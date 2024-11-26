@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>猫咪扫雷</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            background-color: black;
+            width: 100%;
+            height: 100%;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-family: Arial, sans-serif;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* 添加一个包装容器 */
+        .game-wrapper {
+            position: relative;
+            width: 390px;
+            height: 844px;
+            overflow: hidden;
+        }
+
+        /* 将背景图移到包装容器中 */
+        .game-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('./images/background.png');
+            background-position: center top;
+            background-repeat: no-repeat;
+            background-size: 100% 100%;
+            z-index: -1;
+        }
+
+        #game-container {
+            margin-top: 290px;
+            margin-left: 15px;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(10, 1fr);
+            gap: 0;
+            padding: 2px;
+            background: black;
+            width: 359.424px;
+            height: 449.28px;
+        }
+
+        .cell {
+            width: 100%;
+            height: 100%;
+            background-color: #95a5a6;
+            background: #95a5a6 url('./images/lattice.png') no-repeat center center;
+            background-size: cover;
+            border: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-sizing: border-box;
+        }
+
+        .cell.revealed {
+            background: #BDC3A7;
+            border: 1px solid #979795;
+            color: white;
+        }
+
+        .cell.revealed.game-over {
+            background: #9EA48B;
+            border: 1px solid #7A7A78;
+        }
+
+        .cell.flagged {
+            position: relative;
+        }
+
+        .cell.flagged::after {
+            content: '';
+            position: absolute;
+            top: 15%;
+            left: 15%;
+            width: 70%;
+            height: 70%;
+            background: url('./images/cat.png') no-repeat center center;
+            background-size: cover;
+            z-index: 1;
+        }
+
+        .cell.mine {
+            background: #9EA48B url('./images/boom.png') no-repeat center center !important;
+            background-size: 100% !important;
+        }
+
+        #start-button {
+            position: absolute;
+            top: 203px;
+            left: calc(50% + 9px);
+            width: 156px;
+            height: 52px;
+            background: url('./images/button.png') no-repeat center center;
+            background-size: contain;
+            border: none;
+            cursor: pointer;
+            transform: translateX(-50%);
+        }
+
+        #win-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 324px;
+            height: 240px;
+            background: url('./images/ending.png') no-repeat center center;
+            background-size: contain;
+            z-index: 1000;
+        }
+
+        #continue-button {
+            position: absolute;
+            bottom: 31px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 108px;
+            height: 36px;
+            background: url('./images/restart.png') no-repeat center center;
+            background-size: contain;
+            border: none;
+            cursor: pointer;
+            z-index: 1001;
+            margin-left: -96px;
+        }
+
+        #mines-left {
+            display: none;
+        }
+
+        /* 添加数字颜色样式 */
+        .cell.revealed[data-number="1"] {
+            color: #F15A07;  /* 从 #F07937 改为 #F15A07 */
+        }
+        .cell.revealed[data-number="2"] {
+            color: #3575B5;  /* 蓝色 */
+        }
+        .cell.revealed[data-number="3"] {
+            color: #7AAD45;  /* 绿色 */
+        }
+        .cell.revealed[data-number="4"] {
+            color: #E5401B;  /* 红色 */
+        }
+
+        #win-time {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #F14996;
+            font-size: 19.38px;
+            font-weight: bold;
+            text-align: center;
+            z-index: 1001;
+            margin-left: -98px;
+        }
+
+        #game-time {
+            position: absolute;
+            top: 218px;
+            left: calc(50% + 15px);
+            transform: translateX(-50%);
+            color: #FFFEFD;
+            font-size: 24px;
+            font-weight: bold;
+            margin-left: 138px;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-wrapper">
+        <div class="game-background"></div>
+        <button id="start-button"></button>
+        <div id="game-time">0:00</div>
+        <div id="game-container"></div>
+        <div id="win-popup">
+            <div id="win-time"></div>
+            <button id="continue-button"></button>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE_X = 8;
+        const GRID_SIZE_Y = 10;
+        const MINES_COUNT = 10;
+        let grid = [];
+        let revealed = [];
+        let flagged = [];
+        let gameOver = false;
+        let minesLeft = MINES_COUNT;
+
+        // 添加计时相关变量
+        let startTime;
+        let gameTimer;
+
+        let isFirstClick = true;  // 添加标记第一次点击的变量
+
+        function updateGameTime() {
+            const currentTime = new Date();
+            const timeUsed = currentTime - startTime;
+            document.getElementById('game-time').textContent = formatTime(timeUsed);
+        }
+
+        function initializeGame() {
+            // 移除计时器初始化
+            if (gameTimer) {
+                clearInterval(gameTimer);
+            }
+            isFirstClick = true;  // 重置第一次点击标记
+            document.getElementById('game-time').textContent = '0:00';
+            
+            grid = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(0));
+            revealed = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(false));
+            flagged = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(false));
+            gameOver = false;
+            minesLeft = MINES_COUNT;
+
+            // 放置炸弹
+            let minesPlaced = 0;
+            while (minesPlaced < MINES_COUNT) {
+                const x = Math.floor(Math.random() * GRID_SIZE_X);
+                const y = Math.floor(Math.random() * GRID_SIZE_Y);
+                if (grid[y][x] !== -1) {
+                    grid[y][x] = -1;
+                    minesPlaced++;
+                }
+            }
+
+            // 计算数字
+            for (let y = 0; y < GRID_SIZE_Y; y++) {
+                for (let x = 0; x < GRID_SIZE_X; x++) {
+                    if (grid[y][x] !== -1) {
+                        grid[y][x] = countAdjacentMines(x, y);
+                    }
+                }
+            }
+
+            renderGrid();
+        }
+
+        function countAdjacentMines(x, y) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const newY = y + dy;
+                    const newX = x + dx;
+                    if (newY >= 0 && newY < GRID_SIZE_Y && newX >= 0 && newX < GRID_SIZE_X) {
+                        if (grid[newY][newX] === -1) count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        function renderGrid() {
+            const container = document.getElementById('game-container');
+            container.innerHTML = '';
+            
+            for (let y = 0; y < GRID_SIZE_Y; y++) {
+                for (let x = 0; x < GRID_SIZE_X; x++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+
+                    if (revealed[y][x]) {
+                        cell.classList.add('revealed');
+                        if (gameOver) {
+                            cell.classList.add('game-over');
+                        }
+                        if (grid[y][x] === -1) {
+                            cell.classList.add('mine');
+                        } else if (grid[y][x] > 0) {
+                            cell.textContent = grid[y][x];
+                            cell.dataset.number = grid[y][x];
+                        }
+                    } else if (flagged[y][x]) {
+                        cell.classList.add('flagged');
+                    }
+
+                    cell.addEventListener('click', () => handleClick(x, y));
+                    cell.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        handleFlag(x, y);
+                    });
+                    cell.addEventListener('touchstart', handleTouchStart);
+                    cell.addEventListener('touchend', handleTouchEnd);
+
+                    container.appendChild(cell);
+                }
+            }
+        }
+
+        let touchTimer;
+        let touchDuration = 500;
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const cell = e.target;
+            touchTimer = setTimeout(() => {
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                handleFlag(x, y);
+            }, touchDuration);
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                const cell = e.target;
+                const x = parseInt(cell.dataset.x);
+                const y = parseInt(cell.dataset.y);
+                handleClick(x, y);
+            }
+        }
+
+        function handleClick(x, y) {
+            if (gameOver || flagged[y][x]) return;
+            
+            // 第一次点击时开始计时
+            if (isFirstClick) {
+                isFirstClick = false;
+                startTime = new Date();
+                gameTimer = setInterval(updateGameTime, 1000);
+            }
+
+            // 如果点击到地雷
+            if (grid[y][x] === -1) {
+                gameOver = true;
+                if (gameTimer) {
+                    clearInterval(gameTimer);  // 点到地雷时停止计时
+                }
+                revealAll();
+                return;
+            }
+
+            // 如果点击的是已经揭示的格子
+            if (revealed[y][x]) {
+                let flagCount = 0;
+                // 计算周围标记的数量
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const newY = y + dy;
+                        const newX = x + dx;
+                        if (newY >= 0 && newY < GRID_SIZE_Y && newX >= 0 && newX < GRID_SIZE_X) {
+                            if (flagged[newY][newX]) flagCount++;
+                        }
+                    }
+                }
+                // 如果标记数量等于格子上的数字，则揭示周围未标记的格子
+                if (flagCount === grid[y][x]) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            const newY = y + dy;
+                            const newX = x + dx;
+                            if (newY >= 0 && newY < GRID_SIZE_Y && newX >= 0 && newX < GRID_SIZE_X) {
+                                if (!flagged[newY][newX] && !revealed[newY][newX]) {
+                                    if (grid[newY][newX] === -1) {
+                                        gameOver = true;
+                                        if (gameTimer) {
+                                            clearInterval(gameTimer);  // 点到地雷时停止计时
+                                        }
+                                        revealAll();
+                                        return;
+                                    }
+                                    reveal(newX, newY);
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // 如果是未揭示的格子，常揭示
+                reveal(x, y);
+            }
+            
+            checkWin();
+        }
+
+        function handleFlag(x, y) {
+            if (gameOver || revealed[y][x]) return;
+
+            flagged[y][x] = !flagged[y][x];
+            minesLeft += flagged[y][x] ? -1 : 1;
+            renderGrid();
+            checkWin();
+        }
+
+        function reveal(x, y) {
+            if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y || revealed[y][x] || flagged[y][x]) return;
+
+            revealed[y][x] = true;
+            
+            // 只有当点击的是 0 且是由用户直接点击的格子时才展开
+            if (grid[y][x] === 0) {
+                let flagCount = 0;
+                // 检查周围的标记数量
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        const newY = y + dy;
+                        const newX = x + dx;
+                        if (newY >= 0 && newY < GRID_SIZE_Y && newX >= 0 && newX < GRID_SIZE_X) {
+                            if (flagged[newY][newX]) flagCount++;
+                        }
+                    }
+                }
+                // 只有当周围没有标记时才展开
+                if (flagCount === 0) {
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            reveal(x + dx, y + dy);
+                        }
+                    }
+                }
+            }
+            
+            renderGrid();
+        }
+
+        function revealAll() {
+            for (let y = 0; y < GRID_SIZE_Y; y++) {
+                for (let x = 0; x < GRID_SIZE_X; x++) {
+                    // 如果是炸弹或已经揭示的格子，就显示出来
+                    if (grid[y][x] === -1 || revealed[y][x]) {
+                        revealed[y][x] = true;
+                    }
+                }
+            }
+            if (gameTimer) {
+                clearInterval(gameTimer);  // 游戏结束时停止计时
+            }
+            renderGrid();
+        }
+
+        function formatTime(milliseconds) {
+            const seconds = Math.floor(milliseconds / 1000);
+            const minutes = Math.floor(seconds / 60);
+            const remainingSeconds = seconds % 60;
+            return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+        }
+
+        function checkWin() {
+            let win = true;
+            let unrevealedCount = 0;
+            let unrevealedMineCount = 0;
+
+            // 计算未揭示的格子数量和未揭示的炸弹数量
+            for (let y = 0; y < GRID_SIZE_Y; y++) {
+                for (let x = 0; x < GRID_SIZE_X; x++) {
+                    if (!revealed[y][x] && !flagged[y][x]) {
+                        unrevealedCount++;
+                        if (grid[y][x] === -1) {
+                            unrevealedMineCount++;
+                        }
+                    }
+                    // 原有的胜利条件检查
+                    if (grid[y][x] !== -1 && !revealed[y][x]) win = false;
+                    if (grid[y][x] === -1 && !flagged[y][x]) win = false;
+                }
+            }
+
+            // 如果只剩下一个未揭示的格子，且它是炸弹，直接胜利
+            if (unrevealedCount === unrevealedMineCount && unrevealedCount > 0) {
+                win = true;
+                // 自动标记剩余的弹
+                for (let y = 0; y < GRID_SIZE_Y; y++) {
+                    for (let x = 0; x < GRID_SIZE_X; x++) {
+                        if (!revealed[y][x] && !flagged[y][x] && grid[y][x] === -1) {
+                            flagged[y][x] = true;
+                        }
+                    }
+                }
+                renderGrid();
+            }
+
+            if (win) {
+                gameOver = true;
+                if (gameTimer) {
+                    clearInterval(gameTimer);  // 胜利时停止计时
+                }
+                const endTime = new Date();
+                const timeUsed = endTime - startTime;
+                document.getElementById('win-time').textContent = `用时：${formatTime(timeUsed)}`;
+                document.getElementById('win-popup').style.display = 'block';
+            }
+        }
+
+        document.getElementById('start-button').addEventListener('click', () => {
+            document.getElementById('game-time').textContent = '0:00';  // 重置游戏时间显示
+            initializeGame();
+        });
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // 初始化游戏
+        initializeGame();
+
+        // 修改继续按钮的点击事件
+        document.getElementById('continue-button').addEventListener('click', () => {
+            document.getElementById('win-popup').style.display = 'none';
+            document.getElementById('win-time').textContent = '';
+            document.getElementById('game-time').textContent = '0:00';  // 重置游戏时间显示
+            initializeGame();
+        });
+
+        // 在初始化游戏之前添加预加载函数
+        function preloadImages() {
+            const images = [
+                './images/background.png',
+                './images/lattice.png',
+                './images/cat.png',
+                './images/boom.png',
+                './images/button.png',
+                './images/ending.png',
+                './images/restart.png'
+            ];
+
+            images.forEach(src => {
+                const img = new Image();
+                img.src = src;
+                img.onerror = () => {
+                    console.error('Failed to load image:', src);
+                };
+                img.onload = () => {
+                    console.log('Successfully loaded image:', src);
+                };
+            });
+        }
+
+        // 在页面加载��成后执行预��载
+        window.addEventListener('load', () => {
+            preloadImages();
+            initializeGame();
+        });
+    </script>
+</body>
+</html>
