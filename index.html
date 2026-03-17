@@ -16,7 +16,6 @@
         }
 
         html, body {
-            position: fixed;
             width: 100%;
             height: 100%;
             overflow: hidden;
@@ -24,25 +23,21 @@
 
         body {
             background-color: black;
-            width: 100%;
-            height: 100%;
-            margin: 0 auto;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            position: relative;
             font-family: Arial, sans-serif;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
         }
 
         /* 添加一个包装容器 */
         .game-wrapper {
-            position: relative;
+            position: absolute;
+            top: 50%;
+            left: 50%;
             width: 390px;
             height: 844px;
             overflow: hidden;
+            transform: translate(-50%, -50%) scale(var(--game-scale, 1));
+            transform-origin: top left;
         }
 
         /* 将背景图移到包装容器中 */
@@ -136,7 +131,7 @@
 
         #win-popup {
             display: none;
-            position: fixed;
+            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -218,6 +213,16 @@
     </div>
 
     <script>
+        const DESIGN_WIDTH = 390;
+        const DESIGN_HEIGHT = 844;
+
+        function updateGameScale() {
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const scale = Math.min(vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
+            document.documentElement.style.setProperty('--game-scale', String(scale));
+        }
+
         const GRID_SIZE_X = 8;
         const GRID_SIZE_Y = 10;
         const MINES_COUNT = 10;
@@ -567,9 +572,13 @@
 
         // 在页面加载��成后执行预��载
         window.addEventListener('load', () => {
+            updateGameScale();
             preloadImages();
             initializeGame();
         });
+
+        window.addEventListener('resize', updateGameScale);
+        window.addEventListener('orientationchange', updateGameScale);
     </script>
 </body>
 </html>
