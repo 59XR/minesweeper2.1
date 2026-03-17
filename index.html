@@ -33,11 +33,17 @@
             position: absolute;
             top: 50%;
             left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        /* 真实画布（按设计稿等比缩放） */
+        .game-stage {
+            position: relative;
             width: 390px;
             height: 844px;
             overflow: hidden;
-            transform: translate(-50%, -50%) scale(var(--game-scale, 1));
-            transform-origin: top left;
+            transform: scale(var(--game-scale, 1));
+            transform-origin: center;
         }
 
         /* 将背景图移到包装容器中 */
@@ -202,13 +208,15 @@
 </head>
 <body>
     <div class="game-wrapper">
-        <div class="game-background"></div>
-        <button id="start-button"></button>
-        <div id="game-time">0:00</div>
-        <div id="game-container"></div>
-        <div id="win-popup">
-            <div id="win-time"></div>
-            <button id="continue-button"></button>
+        <div class="game-stage">
+            <div class="game-background"></div>
+            <button id="start-button"></button>
+            <div id="game-time">0:00</div>
+            <div id="game-container"></div>
+            <div id="win-popup">
+                <div id="win-time"></div>
+                <button id="continue-button"></button>
+            </div>
         </div>
     </div>
 
@@ -217,9 +225,10 @@
         const DESIGN_HEIGHT = 844;
 
         function updateGameScale() {
-            const vw = window.innerWidth;
-            const vh = window.innerHeight;
-            const scale = Math.min(vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
+            const vv = window.visualViewport;
+            const vw = vv?.width ?? window.innerWidth;
+            const vh = vv?.height ?? window.innerHeight;
+            const scale = Math.min(1, vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
             document.documentElement.style.setProperty('--game-scale', String(scale));
         }
 
@@ -579,6 +588,11 @@
 
         window.addEventListener('resize', updateGameScale);
         window.addEventListener('orientationchange', updateGameScale);
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', updateGameScale);
+            window.visualViewport.addEventListener('scroll', updateGameScale);
+        }
     </script>
 </body>
 </html>
