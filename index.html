@@ -128,7 +128,13 @@
             left: calc(50% + 9px);
             width: 156px;
             height: 52px;
-            background: url('./images/button.png') no-repeat center center;
+            background-image: image-set(
+                url('./images/button.png') 1x,
+                url('./images/button@2x.png') 2x,
+                url('./images/button@3x.png') 3x
+            );
+            background-repeat: no-repeat;
+            background-position: center center;
             background-size: contain;
             border: none;
             cursor: pointer;
@@ -155,7 +161,13 @@
             transform: translateX(-50%);
             width: 108px;
             height: 36px;
-            background: url('./images/restart.png') no-repeat center center;
+            background-image: image-set(
+                url('./images/restart.png') 1x,
+                url('./images/restart@2x.png') 2x,
+                url('./images/restart@3x.png') 3x
+            );
+            background-repeat: no-repeat;
+            background-position: center center;
             background-size: contain;
             border: none;
             cursor: pointer;
