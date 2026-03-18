@@ -46,6 +46,106 @@
             transform-origin: center;
         }
 
+        /* 弹窗出现时，只模糊“可点击的格子盘” */
+        .game-stage.modal-open #game-container {
+            filter: blur(2px) brightness(0.97);
+            -webkit-filter: blur(2px) brightness(0.97);
+            pointer-events: none;
+        }
+
+        /* 踩雷抖动：用“视差”让各元素轻微不同步/不同幅度 */
+        @keyframes shake-parallax {
+            0%   { transform: translate3d(0, 0, 0); }
+            12%  { transform: translate3d(calc(var(--sx, 2px) * -0.55), calc(var(--sy, 1px) * 0.45), 0); }
+            24%  { transform: translate3d(calc(var(--sx, 2px) * 0.55), calc(var(--sy, 1px) * -0.45), 0); }
+            38%  { transform: translate3d(calc(var(--sx, 2px) * -0.4), calc(var(--sy, 1px) * 0.35), 0); }
+            52%  { transform: translate3d(calc(var(--sx, 2px) * 0.35), calc(var(--sy, 1px) * -0.3), 0); }
+            70%  { transform: translate3d(calc(var(--sx, 2px) * -0.22), calc(var(--sy, 1px) * 0.18), 0); }
+            88%  { transform: translate3d(calc(var(--sx, 2px) * 0.12), calc(var(--sy, 1px) * -0.12), 0); }
+            100% { transform: translate3d(0, 0, 0); }
+        }
+
+        /* 针对本身依赖 translateX(-50%) 居中的元素，抖动时必须保留它 */
+        @keyframes shake-parallax-centered-x50 {
+            0%   { transform: translateX(-50%) translate3d(0, 0, 0); }
+            12%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * -0.55), calc(var(--sy, 1px) * 0.45), 0); }
+            24%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * 0.55), calc(var(--sy, 1px) * -0.45), 0); }
+            38%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * -0.4), calc(var(--sy, 1px) * 0.35), 0); }
+            52%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * 0.35), calc(var(--sy, 1px) * -0.3), 0); }
+            70%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * -0.22), calc(var(--sy, 1px) * 0.18), 0); }
+            88%  { transform: translateX(-50%) translate3d(calc(var(--sx, 2px) * 0.12), calc(var(--sy, 1px) * -0.12), 0); }
+            100% { transform: translateX(-50%) translate3d(0, 0, 0); }
+        }
+
+        .game-stage.shake .game-background,
+        .game-stage.shake #game-container,
+        .game-stage.shake #win-popup {
+            will-change: transform;
+            animation-name: shake-parallax;
+            animation-fill-mode: both;
+            animation-timing-function: ease-in-out;
+        }
+
+        .game-stage.shake #start-button,
+        .game-stage.shake #game-time {
+            will-change: transform;
+            animation-name: shake-parallax-centered-x50;
+            animation-fill-mode: both;
+            animation-timing-function: ease-in-out;
+        }
+
+        /* 背景：最轻微 */
+        .game-stage.shake .game-background {
+            --sx: 1.248px;
+            --sy: 0.78px;
+            animation-duration: 560ms;
+            animation-delay: 0ms;
+        }
+
+        /* 棋盘：最明显 */
+        .game-stage.shake #game-container {
+            --sx: 2.184px;
+            --sy: 0.936px;
+            animation-duration: 520ms;
+            animation-delay: 12ms;
+        }
+
+        /* 顶部 UI：中等、略晚一点 */
+        .game-stage.shake #start-button {
+            --sx: 1.248px;
+            --sy: 0.624px;
+            animation-duration: 500ms;
+            animation-delay: 18ms;
+        }
+
+        .game-stage.shake #game-time {
+            --sx: 1.092px;
+            --sy: 0.546px;
+            animation-duration: 540ms;
+            animation-delay: 10ms;
+        }
+
+        /* 弹窗（如果此时在显示）：很轻微 */
+        .game-stage.shake #win-popup {
+            --sx: 1.248px;
+            --sy: 0.78px;
+            animation-duration: 600ms;
+            animation-delay: 0ms;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .game-stage.shake .game-background,
+            .game-stage.shake #game-container,
+            .game-stage.shake #win-popup {
+                animation: none;
+            }
+
+            .game-stage.shake #start-button,
+            .game-stage.shake #game-time {
+                animation: none;
+            }
+        }
+
         /* 将背景图移到包装容器中 */
         .game-background {
             position: absolute;
@@ -80,6 +180,7 @@
             background: #95a5a6 url('./images/lattice.png') no-repeat center center;
             background-size: cover;
             border: none;
+            position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -88,6 +189,17 @@
             cursor: pointer;
             touch-action: manipulation;
             box-sizing: border-box;
+            transition: transform 80ms ease, filter 80ms ease;
+        }
+
+        .cell:active {
+            transform: scale(0.98);
+            filter: brightness(1.08);
+        }
+
+        .cell.revealed:active {
+            transform: none;
+            filter: none;
         }
 
         .cell.revealed {
@@ -117,9 +229,75 @@
             z-index: 1;
         }
 
+        @keyframes flag-pop {
+            0% { transform: scale(1); filter: brightness(1); }
+            45% { transform: scale(0.96); filter: brightness(1.08); }
+            100% { transform: scale(1); filter: brightness(1); }
+        }
+
+        @keyframes flag-icon-pop {
+            0% { transform: scale(0.7) rotate(-4deg); opacity: 0.85; }
+            60% { transform: scale(1.05) rotate(2deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+
+        .cell.flag-feedback {
+            animation: flag-pop 220ms ease-out both;
+        }
+
+        .cell.flag-feedback::after {
+            animation: flag-icon-pop 260ms cubic-bezier(.2,.9,.2,1.2) both;
+            transform-origin: 50% 60%;
+        }
+
         .cell.mine {
-            background: #9EA48B url('./images/boom.png') no-repeat center center !important;
-            background-size: 100% !important;
+            /* 地雷格：底层仍是格子/已揭示背景，炸弹用叠加层显示 */
+            background: #9EA48B url('./images/boom_bg.png') no-repeat center center;
+            background-size: cover;
+        }
+
+        /* 确保揭示后的地雷格也使用炸弹背景（覆盖 .cell.revealed） */
+        .cell.revealed.mine {
+            background: #9EA48B url('./images/boom_bg.png') no-repeat center center;
+            background-size: cover;
+        }
+
+        /* 踩雷后：地雷以“涟漪”扩散方式依次出现 */
+        @keyframes mine-ripple-reveal {
+            0% { transform: scale(0.88); filter: brightness(1.35) contrast(1.08); opacity: 0.96; }
+            55% { transform: scale(1.06); filter: brightness(1.15) contrast(1.04); opacity: 1; }
+            100% { transform: scale(1); filter: brightness(1) contrast(1); opacity: 1; }
+        }
+
+        /* 用 ::before 叠加炸弹，避免与 flagged::after 冲突 */
+        .cell.mine::before {
+            content: '';
+            position: absolute;
+            top: 8%;
+            left: 8%;
+            width: 84%;
+            height: 84%;
+            background: url('./images/boom.png') no-repeat center center;
+            background-size: contain;
+            z-index: 2;
+            pointer-events: none;
+            transform: scale(1);
+            filter: brightness(1) contrast(1);
+            opacity: 1;
+        }
+
+        .cell.mine.mine-ripple::before {
+            animation: mine-ripple-reveal 280ms ease-in-out both;
+        }
+
+        @keyframes mine-hit {
+            0% { transform: scale(1); filter: brightness(1) contrast(1); opacity: 1; }
+            35% { transform: scale(1.06); filter: brightness(1.22) contrast(1.1); opacity: 1; }
+            100% { transform: scale(1); filter: brightness(1) contrast(1); opacity: 1; }
+        }
+
+        .cell.mine.mine-feedback::before {
+            animation: mine-hit 213ms cubic-bezier(.2,.9,.2,1) both;
         }
 
         #start-button {
@@ -139,6 +317,12 @@
             padding: 0;
             appearance: none;
             -webkit-appearance: none;
+            transition: transform 90ms ease, filter 90ms ease;
+        }
+
+        #start-button:active {
+            transform: translateX(-50%) scale(0.98);
+            filter: brightness(1.08);
         }
 
         #win-popup {
@@ -173,6 +357,12 @@
             padding: 0;
             appearance: none;
             -webkit-appearance: none;
+            transition: transform 90ms ease, filter 90ms ease;
+        }
+
+        #continue-button:active {
+            transform: translateX(-50%) scale(0.98);
+            filter: brightness(1.08);
         }
 
         @supports (background-image: image-set(url("./images/button.png") 1x)) {
@@ -251,6 +441,52 @@
     </div>
 
     <script>
+        function clickFeedback() {
+            // 某些环境（如 iOS Safari）不支持 vibration，会自动忽略
+            if (navigator.vibrate) navigator.vibrate(12);
+        }
+
+        function flagFeedback(x, y) {
+            // 标记时更轻的反馈
+            if (navigator.vibrate) navigator.vibrate(8);
+            requestAnimationFrame(() => {
+                const el = document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+                if (!el) return;
+                el.classList.remove('flag-feedback');
+                // 强制 reflow，确保重复触发动画
+                void el.offsetWidth;
+                el.classList.add('flag-feedback');
+                window.setTimeout(() => el.classList.remove('flag-feedback'), 320);
+            });
+        }
+
+        function mineFeedback() {
+            // 踩雷时更明显一点的震动（不支持则忽略）
+            if (navigator.vibrate) navigator.vibrate([0, 30, 25, 40]);
+            const stage = document.querySelector('.game-stage');
+            if (!stage) return;
+            stage.classList.remove('shake'); // 允许连续触发
+            // 强制 reflow，确保重新加 class 会触发动画
+            void stage.offsetWidth;
+            stage.classList.add('shake');
+            window.setTimeout(() => stage.classList.remove('shake'), 700);
+        }
+
+        function mineIconFeedback() {
+            // 在 revealAll/renderGrid 之后触发，确保 mine 元素已存在
+            requestAnimationFrame(() => {
+                const mines = document.querySelectorAll('.cell.mine');
+                mines.forEach(el => {
+                    el.classList.remove('mine-feedback');
+                    void el.offsetWidth;
+                    el.classList.add('mine-feedback');
+                });
+                window.setTimeout(() => {
+                    mines.forEach(el => el.classList.remove('mine-feedback'));
+                }, 420);
+            });
+        }
+
         const DESIGN_WIDTH = 390;
         const DESIGN_HEIGHT = 844;
 
@@ -270,6 +506,8 @@
         let flagged = [];
         let gameOver = false;
         let minesLeft = MINES_COUNT;
+        let mineHit = null; // {x, y}：踩到的雷坐标（用于涟漪揭雷）
+        let mineRippleTimers = [];
 
         // 添加计时相关变量
         let startTime;
@@ -290,6 +528,9 @@
             }
             isFirstClick = true;  // 重置第一次点击标记
             document.getElementById('game-time').textContent = '0:00';
+            mineHit = null;
+            mineRippleTimers.forEach(t => clearTimeout(t));
+            mineRippleTimers = [];
             
             grid = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(0));
             revealed = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(false));
@@ -373,6 +614,57 @@
             }
         }
 
+        function revealMineCell(x, y, { animate } = { animate: true }) {
+            // 只更新单个格子，避免整盘重渲染导致动画重复触发
+            revealed[y][x] = true;
+            const el = document.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+            if (!el) {
+                // 兜底：如果找不到（极少），再整体渲染一次
+                renderGrid();
+                return;
+            }
+
+            el.classList.add('revealed', 'mine');
+            if (gameOver) el.classList.add('game-over');
+            el.classList.remove('flagged');
+            el.textContent = '';
+            el.removeAttribute('data-number');
+
+            if (animate) {
+                el.classList.remove('mine-ripple');
+                void el.offsetWidth;
+                el.classList.add('mine-ripple');
+                window.setTimeout(() => el.classList.remove('mine-ripple'), 360);
+            }
+        }
+
+        function revealMinesRipple(fromX, fromY) {
+            mineRippleTimers.forEach(t => clearTimeout(t));
+            mineRippleTimers = [];
+
+            const mines = [];
+            for (let y = 0; y < GRID_SIZE_Y; y++) {
+                for (let x = 0; x < GRID_SIZE_X; x++) {
+                    if (grid[y][x] === -1) {
+                        mines.push({ x, y, dist: Math.hypot(x - fromX, y - fromY) });
+                    }
+                }
+            }
+
+            mines.sort((a, b) => a.dist - b.dist);
+            const speed = 55; // ms/格：涟漪速度
+
+            mines.forEach(({ x, y, dist }) => {
+                const delay = Math.round(dist * speed);
+                const timer = window.setTimeout(() => {
+                    // 中心那颗已经先揭示过了，这里跳过
+                    if (x === fromX && y === fromY) return;
+                    revealMineCell(x, y, { animate: true });
+                }, delay);
+                mineRippleTimers.push(timer);
+            });
+        }
+
         let touchTimer;
         let touchDuration = 500;
 
@@ -410,10 +702,14 @@
             // 如果点击到地雷
             if (grid[y][x] === -1) {
                 gameOver = true;
+                mineHit = { x, y };
                 if (gameTimer) {
                     clearInterval(gameTimer);  // 点到地雷时停止计时
                 }
-                revealAll();
+                // 先显示踩到的那颗雷，再涟漪展开其余地雷
+                revealMineCell(x, y, { animate: true });
+                revealMinesRipple(x, y);
+                mineFeedback();
                 return;
             }
 
@@ -440,10 +736,13 @@
                                 if (!flagged[newY][newX] && !revealed[newY][newX]) {
                                     if (grid[newY][newX] === -1) {
                                         gameOver = true;
+                                        mineHit = { x: newX, y: newY };
                                         if (gameTimer) {
                                             clearInterval(gameTimer);  // 点到地雷时停止计时
                                         }
-                                        revealAll();
+                                        revealMineCell(newX, newY, { animate: true });
+                                        revealMinesRipple(newX, newY);
+                                        mineFeedback();
                                         return;
                                     }
                                     reveal(newX, newY);
@@ -466,6 +765,7 @@
             flagged[y][x] = !flagged[y][x];
             minesLeft += flagged[y][x] ? -1 : 1;
             renderGrid();
+            flagFeedback(x, y);
             checkWin();
         }
 
@@ -564,11 +864,13 @@
                 const endTime = new Date();
                 const timeUsed = endTime - startTime;
                 document.getElementById('win-time').textContent = `用时：${formatTime(timeUsed)}`;
+                document.querySelector('.game-stage')?.classList.add('modal-open');
                 document.getElementById('win-popup').style.display = 'block';
             }
         }
 
         document.getElementById('start-button').addEventListener('click', () => {
+            clickFeedback();
             document.getElementById('game-time').textContent = '0:00';  // 重置游戏时间显示
             initializeGame();
         });
@@ -579,7 +881,9 @@
 
         // 修改继续按钮的点击事件
         document.getElementById('continue-button').addEventListener('click', () => {
+            clickFeedback();
             document.getElementById('win-popup').style.display = 'none';
+            document.querySelector('.game-stage')?.classList.remove('modal-open');
             document.getElementById('win-time').textContent = '';
             document.getElementById('game-time').textContent = '0:00';  // 重置游戏时间显示
             initializeGame();
@@ -592,6 +896,7 @@
                 './images/lattice.png',
                 './images/cat.png',
                 './images/boom.png',
+                './images/boom_bg.png',
                 './images/button.png',
                 './images/ending.png',
                 './images/restart.png'
