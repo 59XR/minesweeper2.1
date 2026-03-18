@@ -743,7 +743,7 @@
             const allowSwipeFlag = !revealed[y][x];
             activePull = { id: e.pointerId, x, y, startY: e.clientY, flaggedBySwipe: false, allowSwipeFlag };
             try { cell.setPointerCapture(e.pointerId); } catch {}
-            if (allowSwipeFlag && !flagged[y][x]) {
+            if (allowSwipeFlag) {
                 cell.classList.add('pulling');
                 cell.style.setProperty('--pull', '0');
             }
@@ -755,7 +755,6 @@
             if (gameOver) return;
             if (!activePull.allowSwipeFlag) return;
             if (revealed[activePull.y][activePull.x]) return;
-            if (flagged[activePull.y][activePull.x]) return;
 
             const dy = e.clientY - activePull.startY;
             const pullPx = Math.max(0, Math.min(SWIPE_MAX_PULL_PX, dy));
