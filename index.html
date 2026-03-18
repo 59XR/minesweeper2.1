@@ -187,7 +187,7 @@
             font-size: 20px;
             font-weight: bold;
             cursor: pointer;
-            touch-action: manipulation;
+            touch-action: none; /* 需要 pointermove 追踪下拉手势 */
             box-sizing: border-box;
             transition: transform 80ms ease, filter 80ms ease;
         }
@@ -200,6 +200,25 @@
         .cell.revealed:active {
             transform: none;
             filter: none;
+        }
+
+        /* 手机端“按住下滑插旗”的拉伸跟手效果 */
+        .cell.pulling {
+            transition: none;
+            transform-origin: 50% 12%;
+            transform: scaleY(calc(1 + var(--pull, 0)));
+            filter: brightness(1.05);
+        }
+
+        @keyframes pull-rebound {
+            0% { transform: scaleY(calc(1 + var(--pull, 0))); }
+            55% { transform: scaleY(0.965); }
+            100% { transform: scaleY(1); }
+        }
+
+        .cell.pull-rebound {
+            transform-origin: 50% 12%;
+            animation: pull-rebound 240ms cubic-bezier(.2,.9,.2,1.2) both;
         }
 
         .cell.revealed {
@@ -490,11 +509,28 @@
         const DESIGN_WIDTH = 390;
         const DESIGN_HEIGHT = 844;
 
-        function updateGameScale() {
+        function getAvailableViewportSize() {
             const vv = window.visualViewport;
             const vw = vv?.width ?? window.innerWidth;
             const vh = vv?.height ?? window.innerHeight;
-            const scale = Math.min(1, vw / DESIGN_WIDTH, vh / DESIGN_HEIGHT);
+
+            // body 有 safe-area padding，会实际压缩可用空间；这里把 padding 扣掉
+            const cs = window.getComputedStyle(document.body);
+            const pl = parseFloat(cs.paddingLeft) || 0;
+            const pr = parseFloat(cs.paddingRight) || 0;
+            const pt = parseFloat(cs.paddingTop) || 0;
+            const pb = parseFloat(cs.paddingBottom) || 0;
+
+            return {
+                width: Math.max(0, vw - pl - pr),
+                height: Math.max(0, vh - pt - pb),
+            };
+        }
+
+        function updateGameScale() {
+            const { width, height } = getAvailableViewportSize();
+            // 在不裁切任何元素的前提下，尽可能放大（contain）
+            const scale = Math.min(width / DESIGN_WIDTH, height / DESIGN_HEIGHT);
             document.documentElement.style.setProperty('--game-scale', String(scale));
         }
 
@@ -508,6 +544,7 @@
         let minesLeft = MINES_COUNT;
         let mineHit = null; // {x, y}：踩到的雷坐标（用于涟漪揭雷）
         let mineRippleTimers = [];
+        let minesReady = false; // 首次点击后才布雷，保证首点安全
 
         // 添加计时相关变量
         let startTime;
@@ -537,28 +574,37 @@
             flagged = Array(GRID_SIZE_Y).fill().map(() => Array(GRID_SIZE_X).fill(false));
             gameOver = false;
             minesLeft = MINES_COUNT;
+            minesReady = false; // 等首点再布雷并计算数字
 
-            // 放置炸弹
+            renderGrid();
+        }
+
+        function placeMines(excludeX, excludeY) {
             let minesPlaced = 0;
             while (minesPlaced < MINES_COUNT) {
                 const x = Math.floor(Math.random() * GRID_SIZE_X);
                 const y = Math.floor(Math.random() * GRID_SIZE_Y);
+                if (x === excludeX && y === excludeY) continue;
                 if (grid[y][x] !== -1) {
                     grid[y][x] = -1;
                     minesPlaced++;
                 }
             }
+        }
 
-            // 计算数字
+        function computeNumbers() {
             for (let y = 0; y < GRID_SIZE_Y; y++) {
                 for (let x = 0; x < GRID_SIZE_X; x++) {
-                    if (grid[y][x] !== -1) {
-                        grid[y][x] = countAdjacentMines(x, y);
-                    }
+                    if (grid[y][x] !== -1) grid[y][x] = countAdjacentMines(x, y);
                 }
             }
+        }
 
-            renderGrid();
+        function ensureMinesReady(excludeX, excludeY) {
+            if (minesReady) return;
+            placeMines(excludeX, excludeY);
+            computeNumbers();
+            minesReady = true;
         }
 
         function countAdjacentMines(x, y) {
@@ -601,13 +647,14 @@
                         cell.classList.add('flagged');
                     }
 
-                    cell.addEventListener('click', () => handleClick(x, y));
                     cell.addEventListener('contextmenu', (e) => {
                         e.preventDefault();
                         handleFlag(x, y);
                     });
-                    cell.addEventListener('touchstart', handleTouchStart);
-                    cell.addEventListener('touchend', handleTouchEnd);
+                    cell.addEventListener('pointerdown', handlePointerDown);
+                    cell.addEventListener('pointermove', handlePointerMove);
+                    cell.addEventListener('pointerup', handlePointerUp);
+                    cell.addEventListener('pointercancel', handlePointerCancel);
 
                     container.appendChild(cell);
                 }
@@ -665,28 +712,87 @@
             });
         }
 
-        let touchTimer;
-        let touchDuration = 500;
+        const SWIPE_FLAG_THRESHOLD_PX = 18;
+        const SWIPE_MAX_PULL_PX = 34;
+        let activePull = null; // { id, x, y, startY, flaggedBySwipe, allowSwipeFlag }
 
-        function handleTouchStart(e) {
-            e.preventDefault();
-            const cell = e.target;
-            touchTimer = setTimeout(() => {
-                const x = parseInt(cell.dataset.x);
-                const y = parseInt(cell.dataset.y);
-                handleFlag(x, y);
-            }, touchDuration);
+        function clearPullState(el, { rebound } = { rebound: false }) {
+            if (!el) return;
+            el.classList.remove('pulling');
+            el.style.removeProperty('--pull');
+            if (rebound) {
+                el.classList.remove('pull-rebound');
+                void el.offsetWidth;
+                el.classList.add('pull-rebound');
+                window.setTimeout(() => el.classList.remove('pull-rebound'), 320);
+            } else {
+                el.classList.remove('pull-rebound');
+            }
         }
 
-        function handleTouchEnd(e) {
-            e.preventDefault();
-            if (touchTimer) {
-                clearTimeout(touchTimer);
-                const cell = e.target;
-                const x = parseInt(cell.dataset.x);
-                const y = parseInt(cell.dataset.y);
-                handleClick(x, y);
+        function handlePointerDown(e) {
+            const cell = e.currentTarget;
+            const x = parseInt(cell.dataset.x);
+            const y = parseInt(cell.dataset.y);
+
+            // 鼠标：只响应左键“按住下拉插旗”，右键仍用 contextmenu
+            if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+            if (gameOver) return;
+            // 允许在“已揭示数字”上点按（用于九宫格自动展开），但不允许对它做下拉插旗
+            const allowSwipeFlag = !revealed[y][x];
+            activePull = { id: e.pointerId, x, y, startY: e.clientY, flaggedBySwipe: false, allowSwipeFlag };
+            try { cell.setPointerCapture(e.pointerId); } catch {}
+            if (allowSwipeFlag && !flagged[y][x]) {
+                cell.classList.add('pulling');
+                cell.style.setProperty('--pull', '0');
             }
+        }
+
+        function handlePointerMove(e) {
+            const cell = e.currentTarget;
+            if (!activePull || e.pointerId !== activePull.id) return;
+            if (gameOver) return;
+            if (!activePull.allowSwipeFlag) return;
+            if (revealed[activePull.y][activePull.x]) return;
+            if (flagged[activePull.y][activePull.x]) return;
+
+            const dy = e.clientY - activePull.startY;
+            const pullPx = Math.max(0, Math.min(SWIPE_MAX_PULL_PX, dy));
+            const pull = pullPx / 220; // 0 ~ 0.15 左右
+            cell.style.setProperty('--pull', String(pull));
+
+            if (!activePull.flaggedBySwipe && pullPx >= SWIPE_FLAG_THRESHOLD_PX) {
+                activePull.flaggedBySwipe = true;
+                clearPullState(cell, { rebound: true });
+                handleFlag(activePull.x, activePull.y);
+            }
+        }
+
+        function handlePointerUp(e) {
+            const cell = e.currentTarget;
+            const x = parseInt(cell.dataset.x);
+            const y = parseInt(cell.dataset.y);
+
+            // 统一逻辑：如果已经下拉插旗，就不要再触发点击；否则当作一次点击
+            if (activePull && e.pointerId === activePull.id) {
+                const didFlag = activePull.flaggedBySwipe;
+                const allowSwipeFlag = activePull.allowSwipeFlag;
+                activePull = null;
+                if (allowSwipeFlag) clearPullState(cell, { rebound: !didFlag });
+                if (!didFlag) handleClick(x, y);
+                return;
+            }
+
+            // 兜底：没有 activePull 时（极少），仍允许鼠标左键点击
+            if (e.pointerType === 'mouse' && e.button === 0) handleClick(x, y);
+        }
+
+        function handlePointerCancel() {
+            // 兜底：取消时清理拉伸状态
+            const el = document.querySelector('.cell.pulling');
+            if (el) clearPullState(el, { rebound: false });
+            activePull = null;
         }
 
         function handleClick(x, y) {
@@ -695,6 +801,7 @@
             // 第一次点击时开始计时
             if (isFirstClick) {
                 isFirstClick = false;
+                ensureMinesReady(x, y); // 首点安全：首点后才布雷
                 startTime = new Date();
                 gameTimer = setInterval(updateGameTime, 1000);
             }
@@ -745,7 +852,7 @@
                                         mineFeedback();
                                         return;
                                     }
-                                    reveal(newX, newY);
+                                    revealArea(newX, newY);
                                 }
                             }
                         }
@@ -753,9 +860,9 @@
                 }
             } else {
                 // 如果是未揭示的格子，常揭示
-                reveal(x, y);
+                revealArea(x, y);
             }
-            
+            renderGrid();
             checkWin();
         }
 
@@ -769,35 +876,43 @@
             checkWin();
         }
 
-        function reveal(x, y) {
-            if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y || revealed[y][x] || flagged[y][x]) return;
-
-            revealed[y][x] = true;
-            
-            // 只有当点击的是 0 且是由用户直接点击的格子时才展开
-            if (grid[y][x] === 0) {
-                let flagCount = 0;
-                // 检查周围的标记数量
-                for (let dy = -1; dy <= 1; dy++) {
-                    for (let dx = -1; dx <= 1; dx++) {
-                        const newY = y + dy;
-                        const newX = x + dx;
-                        if (newY >= 0 && newY < GRID_SIZE_Y && newX >= 0 && newX < GRID_SIZE_X) {
-                            if (flagged[newY][newX]) flagCount++;
-                        }
+        function countAdjacentFlags(x, y) {
+            let count = 0;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const ny = y + dy;
+                    const nx = x + dx;
+                    if (ny >= 0 && ny < GRID_SIZE_Y && nx >= 0 && nx < GRID_SIZE_X) {
+                        if (flagged[ny][nx]) count++;
                     }
                 }
-                // 只有当周围没有标记时才展开
-                if (flagCount === 0) {
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            reveal(x + dx, y + dy);
+            }
+            return count;
+        }
+
+        function revealArea(startX, startY) {
+            if (startX < 0 || startX >= GRID_SIZE_X || startY < 0 || startY >= GRID_SIZE_Y) return;
+            if (revealed[startY][startX] || flagged[startY][startX]) return;
+
+            const stack = [{ x: startX, y: startY }];
+            while (stack.length) {
+                const { x, y } = stack.pop();
+                if (x < 0 || x >= GRID_SIZE_X || y < 0 || y >= GRID_SIZE_Y) continue;
+                if (revealed[y][x] || flagged[y][x]) continue;
+                revealed[y][x] = true;
+
+                if (grid[y][x] === 0) {
+                    // 只有当周围没有标记时才展开
+                    if (countAdjacentFlags(x, y) === 0) {
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                if (dx === 0 && dy === 0) continue;
+                                stack.push({ x: x + dx, y: y + dy });
+                            }
                         }
                     }
                 }
             }
-            
-            renderGrid();
         }
 
         function revealAll() {
@@ -876,9 +991,6 @@
         });
         document.addEventListener('contextmenu', e => e.preventDefault());
         
-        // 初始化游戏
-        initializeGame();
-
         // 修改继续按钮的点击事件
         document.getElementById('continue-button').addEventListener('click', () => {
             clickFeedback();
@@ -908,13 +1020,10 @@
                 img.onerror = () => {
                     console.error('Failed to load image:', src);
                 };
-                img.onload = () => {
-                    console.log('Successfully loaded image:', src);
-                };
             });
         }
 
-        // 在页面加载��成后执行预��载
+        // 在页面加载完成后执行预加载
         window.addEventListener('load', () => {
             updateGameScale();
             preloadImages();
